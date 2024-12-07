@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chinese IME</title>
+    <style>
+        textarea {
+            width: 100%;
+            font-size: 16px;
+        }
+        #correctionInterface > div {
+            margin-bottom: 10px;
+        }
+        select, input[type="text"] {
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <textarea id="inputBox" rows="10" cols="50"></textarea>
+    <div id="correctionInterface"></div>
+    <button id="doneButton" onclick="finalizeConversion()">Done</button>
+
+
+
+
+<script src="gr-ime-dict-no-crlf.js"></script>
+<script>
+// const dictionary = {
+//     "nii": ["你", "拟", "旎"],
+//     "jen": ["真", "针"],
+//     "sh": ["是", "事", "示"],
+//     "g": ["个", "各"],
+//     "huaydann": ["坏蛋", "壞蛋"]
+// };
+
+
+
+
+
+
+        let convertedWords = [];
+
+		document.getElementById("inputBox").addEventListener("keydown", function(event) {
+			if (event.key === "Enter") {
+				event.preventDefault();
+				let inputBox = event.target;
+				let cursorPosition = inputBox.selectionStart;
+				let beforeText = inputBox.value.substring(0, cursorPosition);
+
+				if (cursorPosition > 0 && beforeText[cursorPosition - 1] === "\n") {
+					// If the preceding character is a linefeed, insert another linefeed
+					insertAtCursor(inputBox, "\n");
+				} else if (cursorPosition > 0 && /[\u4e00-\u9fa5\u3000-\u303F]/.test(beforeText[cursorPosition - 1])) {
+					// If the preceding character is Chinese or punctuation, insert a linefeed
+					insertAtCursor(inputBox, "\n");
+				} else {
+					// Otherwise, process the pinyin input
+					let afterText = inputBox.value.substring(cursorPosition);
+					convertPinyinToChinese(beforeText, afterText);
+				}
+			}
+		});
+
+
+
+		function convertPinyinToChinese(beforeText, afterText) {
+			// Identify the ASCII text immediately before the cursor, stopping at the first preceding linefeed
+			let match = beforeText.match(/(\n*)([a-zA-Z1-4\s\.\,\?\!]*)$/); // Match trailing linefeeds and ASCII text
+			let linefeeds = match ? match[1] : ""; // Capture any preceding linefeeds
+			let inputText = match ? match[2].trim() : ""; // Capture ASCII text, trim extra spaces
+			beforeText = beforeText.slice(0, -(linefeeds.length + inputText.length)); // Remove linefeeds and inputText from beforeText
+
+			// Preprocess: Add spaces before punctuation marks
+			inputText = inputText.replace(/([a-zA-Z1-4])([.,?!])/g, "$1 $2");
+
+			// Split inputText into words by spaces
+			let inputWords = inputText.split(/\s+/);
+
+			// Map words to dictionary, or leave unchanged if not found
+			let convertedWords = inputWords.map(word => dictionary[word] ? dictionary[word][0] : word);
+
+			// Concatenate converted words
+			let convertedText = convertedWords.join(""); // Concatenate converted words without spaces
+
+			// Update the text in the input box while preserving linefeeds
+			document.getElementById("inputBox").value = beforeText + linefeeds + convertedText + afterText;
+
+			// Set the cursor position after the converted text
+			setCursorPosition((beforeText + linefeeds + convertedText).length);
+
+			// Generate the correction interface using convertedWords
+			generateCorrectionInterface(inputWords, convertedWords, beforeText, linefeeds, afterText);
+		}
+
+
+
+
+
+
+
+        function generateCorrectionInterface(inputWords, convertedWords, beforeText, linefeeds, afterText) {
+            let correctionInterface = document.getElementById("correctionInterface");
+            correctionInterface.innerHTML = ""; // Clear previous interface
+
+            inputWords.forEach((word, index) => {
+                if (dictionary[word.trim()]) {
+                    let container = document.createElement("div");
+                    let textBox = document.createElement("input");
+                    textBox.type = "text";
+                    textBox.value = word;
+                    let dropdown = document.createElement("select");
+
+                    dictionary[word.trim()].forEach((candidate, candidateIndex) => {
+                        let option = document.createElement("option");
+                        option.value = candidate;
+                        option.text = `${candidateIndex + 1} ${candidate}`;
+                        dropdown.appendChild(option);
+                    });
+
+                    // Add event listener to update the main text box
+                    dropdown.addEventListener("change", function() {
+                        updateMainTextBox(index, dropdown.value, convertedWords, beforeText, linefeeds, afterText);
+                    });
+
+                    container.appendChild(textBox);
+                    container.appendChild(dropdown);
+                    correctionInterface.appendChild(container);
+                }
+            });
+        }
+
+		function updateMainTextBox(wordIndex, newValue, convertedWords, beforeText, linefeeds, afterText) {
+			// Step 1: Update the convertedWords array at the specified wordIndex with the new candidate value
+			convertedWords[wordIndex] = newValue;
+
+			// Step 2: Recalculate the convertedText by joining the updated convertedWords array
+			let convertedText = convertedWords.join(""); 
+
+			// Step 3: Recalculate the main text value (beforeText + linefeeds + updated convertedText + afterText)
+			let inputBox = document.getElementById("inputBox");
+
+			// Construct the updated text value
+			inputBox.value = beforeText + linefeeds + convertedText + afterText;
+
+			// Step 4: Recalculate and set the cursor position at the end of the updated convertedText
+			setCursorPosition(beforeText.length + linefeeds.length + convertedText.length);  // Adjusted to account for linefeed
+
+			// Optional: You might want to generate the correction interface again with the updated convertedWords
+			generateCorrectionInterface(inputWords, convertedWords, beforeText, linefeeds, afterText);
+		}
+
+
+        function setCursorPosition(position) {
+            let inputBox = document.getElementById("inputBox");
+            inputBox.focus();
+            inputBox.setSelectionRange(position, position);
+        }
+
+        function insertAtCursor(inputBox, text) {
+            let cursorPosition = inputBox.selectionStart;
+            let beforeText = inputBox.value.substring(0, cursorPosition);
+            let afterText = inputBox.value.substring(cursorPosition);
+            inputBox.value = beforeText + text + afterText;
+            setCursorPosition(cursorPosition + text.length);
+        }
+
+        function finalizeConversion() {
+            let correctionInterface = document.getElementById("correctionInterface");
+            correctionInterface.innerHTML = ""; // Clear the correction interface
+        }
+    </script>
+</body>
+</html>
+
+
